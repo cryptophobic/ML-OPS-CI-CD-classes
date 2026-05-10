@@ -1,0 +1,26 @@
+# Multi-stage slim image — only what inference.py actually imports.
+FROM python:3.9-slim AS builder
+
+RUN pip install --no-cache-dir --target=/install \
+        torch==2.2.2 \
+        pillow==10.3.0
+
+# Drop pieces that are safe to remove for CPU TorchScript inference.
+RUN find /install -type d \( -name __pycache__ -o -name tests -o -name test \) -prune -exec rm -rf {} + \
+ && rm -rf /install/torch/include \
+           /install/torch/utils/tensorboard \
+           /install/torch/onnx
+
+
+FROM python:3.9-slim AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /install /app/deps
+COPY model.pt inference.py imagenet_classes.txt sample.jpg /app/
+
+ENV PYTHONPATH=/app/deps \
+    PYTHONDONTWRITEBYTECODE=1
+
+ENTRYPOINT ["python", "inference.py"]
+CMD ["sample.jpg"]

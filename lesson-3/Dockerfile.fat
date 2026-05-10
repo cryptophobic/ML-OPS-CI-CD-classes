@@ -1,0 +1,27 @@
+# Fat single-stage image — deliberately unoptimised baseline.
+FROM python:3.9
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+        build-essential \
+        git \
+        curl \
+        wget \
+        vim \
+        unzip \
+        ca-certificates
+
+RUN pip install --upgrade pip
+
+RUN pip install \
+        torch==2.2.2 \
+        torchvision==0.17.2 \
+        pillow==10.3.0 \
+        Django==4.2.16 \
+        numpy==1.26.4
+
+COPY . /app/
+
+ENTRYPOINT ["python", "inference.py"]
+CMD ["sample.jpg"]
