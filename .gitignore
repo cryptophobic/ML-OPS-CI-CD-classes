@@ -28,6 +28,7 @@ terraform.rc
 tfplan
 apply.log
 destroy.log
+argocd-apply.log
 
 # Local kubeconfig dumps
 kubeconfig
