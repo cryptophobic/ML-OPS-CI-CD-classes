@@ -77,17 +77,15 @@ cryptophobic@Mac terraform % aws stepfunctions describe-execution \
 }
 ```
 
-## 4. Три execution-и підряд
+## 4. Список SUCCEEDED executions
+
+Три manual-и + один з GitLab CI:
 
 ```bash
 cryptophobic@Mac terraform % aws stepfunctions list-executions --region eu-central-1 \
-    --state-machine-arn "$SM_ARN" --max-items 5 \
+    --state-machine-arn "$SM_ARN" --max-items 10 \
     --query 'executions[].{name:name,status:status,start:startDate}'
-[
-    { "name": "manual-demo-2-1780318536", "status": "SUCCEEDED", "start": "2026-06-01T15:55:36.479000+03:00" },
-    { "name": "manual-demo-1-1780318535", "status": "SUCCEEDED", "start": "2026-06-01T15:55:36.005000+03:00" },
-    { "name": "manual-1780318363",         "status": "SUCCEEDED", "start": "2026-06-01T15:52:44.524000+03:00" }
-]
+# 4 рядки SUCCEEDED — 3 manual-демо та 1 з GitLab CI (train-<sha>-<pipeline>)
 ```
 
 ![Step Functions executions](images/sfn-executions.png)
