@@ -1,0 +1,25 @@
+# PostgreSQL для MLflow backend store. База `mlflow`, користувач `mlflow`.
+# Розгортається з простих маніфестів (manifests/postgres/) — без Helm,
+# щоб не залежати від змін у Bitnami-каталозі.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres
+  namespace: infra-tools
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Cryptophobic/goit-argo.git
+    targetRevision: main
+    path: manifests/postgres
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

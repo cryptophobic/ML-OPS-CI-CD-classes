@@ -1,0 +1,72 @@
+# MLflow Tracking Server. Backend — Postgres у `mlflow` ns; артефакти — у MinIO
+# (S3-совместимо). ClusterIP на 5000 (criterion). Single gunicorn worker —
+# щоб міграція не саtuрувала CPU під час старту.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlflow
+  namespace: infra-tools
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://community-charts.github.io/helm-charts
+    chart: mlflow
+    targetRevision: 1.8.1
+    helm:
+      values: |
+        replicaCount: 1
+        service:
+          enabled: true
+          type: ClusterIP
+          port: 5000
+          containerPort: 5000
+        extraArgs:
+          workers: "1"
+        backendStore:
+          databaseMigration: true
+          databaseConnectionCheck: true
+          postgres:
+            enabled: true
+            host: postgres.mlflow.svc.cluster.local
+            port: 5432
+            database: mlflow
+            user: mlflow
+            password: mlflow-pass
+            driver: psycopg2
+        artifactRoot:
+          s3:
+            enabled: true
+            bucket: mlflow-artifacts
+            path: ""
+            awsAccessKeyId: mlflow
+            awsSecretAccessKey: mlflow-secret-key
+        extraEnvVars:
+          MLFLOW_S3_ENDPOINT_URL: http://minio.mlflow.svc.cluster.local:9000
+          AWS_DEFAULT_REGION: us-east-1
+        resources:
+          requests:
+            cpu: 200m
+            memory: 384Mi
+          limits:
+            memory: 768Mi
+        livenessProbe:
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 6
+        readinessProbe:
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 6
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

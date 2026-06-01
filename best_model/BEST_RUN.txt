@@ -1,0 +1,4 @@
+run_id=4bcaebe56f4f4d23b08e18543366fc53
+accuracy=0.9667
+loss=0.1913
+params={'learning_rate_init': 0.3, 'epochs': 200}

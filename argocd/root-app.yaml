@@ -1,0 +1,27 @@
+# App-of-Apps. Apply once after ArgoCD bootstrap:
+#   kubectl apply -n infra-tools -f root-app.yaml
+# ArgoCD then reads every Application manifest under apps/ and reconciles
+# the full lesson-8-9 stack (postgres, minio, mlflow, pushgateway,
+# kube-prometheus-stack).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: infra-tools
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Cryptophobic/goit-argo.git
+    targetRevision: main
+    path: apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra-tools
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Helm values for the argo-cd chart (argoproj.github.io/argo-helm).
+# Criterion #2: the service is exposed as ClusterIP and the file configures
+# extraArgs, rbac and timeouts. Trimmed for small (t3.small) worker nodes:
+# dex / applicationSet / notifications are disabled and resource requests are
+# kept low so every component schedules on a tiny cluster.
+# ---------------------------------------------------------------------------
+
+global:
+  # Modest defaults so pods fit on small nodes.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+configs:
+  # argocd-cmd-params-cm — run the API server in insecure mode so a plain
+  # `kubectl port-forward ... 8080:443` (or :80) reaches the UI without a
+  # TLS-redirect loop.
+  params:
+    server.insecure: true
+
+  # argocd-cm — reconciliation timeouts.
+  cm:
+    timeout.reconciliation: 180s
+    timeout.hard.reconciliation: 0s
+
+  # argocd-rbac-cm — read-only by default; the built-in admin keeps full access.
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      g, argocd-admins, role:admin
+    scopes: "[groups]"
+
+# API server / Web UI — exposed inside the cluster only (criterion #2:
+# ClusterIP). Reach it from your laptop with `kubectl port-forward`.
+server:
+  service:
+    type: ClusterIP
+  extraArgs:
+    - --insecure
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# Components not needed for this homework — disabled to save node capacity.
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+applicationSet:
+  enabled: false

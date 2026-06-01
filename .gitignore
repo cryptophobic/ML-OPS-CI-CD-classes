@@ -1,0 +1,50 @@
+# Terraform working dirs
+**/.terraform/*
+
+# State files (local backend) — never commit these
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Variable files that may hold secrets
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI config / plan artifacts
+.terraformrc
+terraform.rc
+*.tfplan
+tfplan
+apply.log
+destroy.log
+argocd-apply.log
+
+# Local kubeconfig dumps
+kubeconfig
+kubeconfig.*
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+mlruns/

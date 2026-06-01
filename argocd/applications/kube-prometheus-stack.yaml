@@ -1,0 +1,97 @@
+# Prometheus + Grafana через офіційний community-чарт.
+# Скрейпить PushGateway через additionalScrapeConfigs. У EKS-керованих
+# control-plane компонентах метрики не експоновані → відповідні exporter-и
+# вимкнено. ServerSideApply — бо CRD-маніфести великі.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: infra-tools
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 86.1.0
+    helm:
+      skipCrds: false
+      values: |
+        crds:
+          enabled: true
+        defaultRules:
+          create: false
+        alertmanager:
+          enabled: false
+        grafana:
+          enabled: true
+          adminPassword: admin
+          service:
+            type: ClusterIP
+            port: 80
+          persistence:
+            enabled: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+        kubeControllerManager:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeProxy:
+          enabled: true
+        kubeStateMetrics:
+          enabled: true
+        kube-state-metrics:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        nodeExporter:
+          enabled: true
+        prometheus-node-exporter:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+        prometheusOperator:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+        prometheus:
+          prometheusSpec:
+            retention: 6h
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                memory: 1Gi
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            additionalScrapeConfigs:
+              - job_name: pushgateway
+                honor_labels: true
+                static_configs:
+                  - targets:
+                      - prometheus-pushgateway.monitoring.svc.cluster.local:9091
+            storageSpec: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
