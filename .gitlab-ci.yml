@@ -1,15 +1,15 @@
-# GitLab CI — запускає Step Function на кожен push у main.
+# GitLab CI — запускає Step Function на кожен push у main / lesson-10.
 # Перед використанням додайте у Settings → CI/CD → Variables:
-#   AWS_ACCESS_KEY_ID        (Protected, Masked)
-#   AWS_SECRET_ACCESS_KEY    (Protected, Masked)
-#   AWS_DEFAULT_REGION       (Protected, plain) — наприклад eu-central-1
-#   STATE_MACHINE_ARN        (Protected, plain) — вивід `terraform output state_machine_arn`
+#   AWS_ACCESS_KEY_ID        (Masked)
+#   AWS_SECRET_ACCESS_KEY    (Masked and hidden)
+#   AWS_DEFAULT_REGION       (Visible)   — наприклад eu-central-1
+#   STATE_MACHINE_ARN        (Visible)   — `terraform output -raw state_machine_arn`
 
 stages:
   - train
 
 variables:
-  AWS_PAGER: ""    # вимкнути less у aws cli, інакше CI висить
+  AWS_PAGER: ""
 
 train-model:
   stage: train
@@ -18,47 +18,28 @@ train-model:
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_BRANCH == "lesson-10"    # курсова демо-гілка
-    - if: $CI_PIPELINE_SOURCE == "web"        # ручний запуск з GitLab UI
+    - if: $CI_COMMIT_BRANCH == "lesson-10"
+    - if: $CI_PIPELINE_SOURCE == "web"
   script:
-    - aws --version
-    - aws sts get-caller-identity
     - |
-      INPUT=$(cat <<EOF
-      {
-        "source": "gitlab-ci",
-        "commit": "${CI_COMMIT_SHORT_SHA}",
-        "branch": "${CI_COMMIT_REF_NAME}",
-        "pipeline_id": "${CI_PIPELINE_ID}",
-        "rows": 1500,
-        "epochs": 100,
-        "learning_rate": 0.01
-      }
-      EOF
-      )
-    - echo "Step Function input:"
-    - echo "$INPUT"
-    - |
-      EXEC_ARN=$(aws stepfunctions start-execution \
-        --state-machine-arn "$STATE_MACHINE_ARN" \
-        --name "train-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}" \
-        --input "$INPUT" \
-        --query 'executionArn' --output text)
+      set -eu
+      aws --version
+      aws sts get-caller-identity
+      INPUT=$(printf '{"source":"gitlab-ci","commit":"%s","branch":"%s","pipeline_id":"%s","rows":1500,"epochs":100,"learning_rate":0.01}' "$CI_COMMIT_SHORT_SHA" "$CI_COMMIT_REF_NAME" "$CI_PIPELINE_ID")
+      echo "Step Function input: $INPUT"
+      EXEC_ARN=$(aws stepfunctions start-execution --state-machine-arn "$STATE_MACHINE_ARN" --name "train-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}" --input "$INPUT" --query 'executionArn' --output text)
       echo "Started execution: $EXEC_ARN"
-      # Polling: дочекатись завершення (max ~3 хв).
       for i in $(seq 1 18); do
-        STATUS=$(aws stepfunctions describe-execution \
-          --execution-arn "$EXEC_ARN" \
-          --query 'status' --output text)
+        STATUS=$(aws stepfunctions describe-execution --execution-arn "$EXEC_ARN" --query 'status' --output text)
         echo "[$i/18] status=$STATUS"
         case "$STATUS" in
           SUCCEEDED) break ;;
           FAILED|TIMED_OUT|ABORTED)
             echo "Execution finished with status $STATUS"
             aws stepfunctions describe-execution --execution-arn "$EXEC_ARN"
-            exit 1 ;;
+            exit 1
+            ;;
         esac
         sleep 10
       done
-      aws stepfunctions describe-execution --execution-arn "$EXEC_ARN" \
-        --query '{status:status,output:output}'
+      aws stepfunctions describe-execution --execution-arn "$EXEC_ARN" --query '{status:status,output:output}'
