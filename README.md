@@ -325,6 +325,30 @@ for a in $(kubectl -n infra-tools get applications -o name); do
 done
 ```
 
+## Скріни з живого запуску
+
+ArgoCD App-of-Apps: усі 10 Application-ів Synced/Healthy
+(інфра + наш `digits-inference`):
+![ArgoCD apps](images/argocd-apps.png)
+
+MLflow runs у експерименті `digits-classifier`
+(LogisticRegression на sklearn-digits, accuracy ≈ 0.972):
+![MLflow runs](images/mlflow-runs.png)
+
+MLflow Model Registry: `digits-classifier` v1 у стадії **Production** —
+саме її FastAPI завантажує при старті:
+![MLflow model registry](images/mlflow-model-registry.png)
+
+Grafana дашборд (auto-imported через ConfigMap-sidecar):
+RPS, latency percentiles, drift events, поточна версія моделі +
+потік JSON-логів з Loki:
+![Grafana dashboard](images/grafana-dashboard.png)
+
+Loki Explore: відфільтровані `drift_detected` події з повним
+JSON-payload (drift_features, max_zscore, threshold, prediction,
+model_version):
+![Loki drift logs](images/loki-drift-logs.png)
+
 ## Локальний smoke-test без кластера
 
 ```bash
