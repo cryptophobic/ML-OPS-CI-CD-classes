@@ -1,0 +1,6 @@
+apiVersion: v2
+name: digits-inference
+description: FastAPI inference service for digits-classifier, with drift detection
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "digits-inference.fullname" . }}
+  labels:
+    {{- include "digits-inference.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "digits-inference.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "digits-inference.selectorLabels" . | nindent 8 }}
+      annotations:
+        # `model.tag` змінюється на кожному retrain → дельта в template змусить
+        # ArgoCD/Deployment виконати rolling restart, навіть якщо `image.tag`
+        # формально лишився тим самим.
+        digits-inference/model-tag: {{ .Values.image.tag | quote }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      containers:
+        - name: inference
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: {{ .Values.mlflow.trackingUri | quote }}
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: {{ .Values.mlflow.s3EndpointUrl | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.mlflow.awsAccessKeyId | quote }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.mlflow.awsSecretAccessKey | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.mlflow.awsRegion | quote }}
+            - name: MODEL_NAME
+              value: {{ .Values.model.name | quote }}
+            - name: MODEL_STAGE
+              value: {{ .Values.model.stage | quote }}
+            - name: DRIFT_THRESHOLD
+              value: {{ .Values.drift.threshold | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

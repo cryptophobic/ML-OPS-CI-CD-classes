@@ -1,0 +1,44 @@
+# Альтернативний (fallback) спосіб додати inference-сервіс до Prometheus
+# у разі, якщо ServiceMonitor (helm/templates/servicemonitor.yaml) з
+# якихось причин не підтягнувся (CRD ще не накотилися, KPS-чарт ще не
+# в стабільному стані тощо).
+#
+# Як підключити: додай цей yaml як `extraScrapeConfigs` у values для
+# kube-prometheus-stack:
+#
+#   prometheus:
+#     prometheusSpec:
+#       additionalScrapeConfigs:
+#         - job_name: digits-inference
+#           ... (вміст нижче)
+#
+# Або через ConfigMap → secret → reference у `additionalScrapeConfigsSecret`.
+#
+# У нашій основній конфігурації ServiceMonitor працює, тож цей файл — для
+# документації згідно структури завдання.
+- job_name: digits-inference
+  scrape_interval: 15s
+  metrics_path: /metrics
+  kubernetes_sd_configs:
+    - role: pod
+      namespaces:
+        names: [inference]
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+      action: keep
+      regex: "true"
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+      action: replace
+      target_label: __metrics_path__
+      regex: (.+)
+    - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+      action: replace
+      regex: ([^:]+)(?::\d+)?;(\d+)
+      replacement: $1:$2
+      target_label: __address__
+    - source_labels: [__meta_kubernetes_namespace]
+      target_label: namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod
+    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+      target_label: app

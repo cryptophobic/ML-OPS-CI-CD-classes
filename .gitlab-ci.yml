@@ -1,0 +1,97 @@
+# GitLab CI/CD: retrain пайплайн для digits-classifier.
+#
+# Flow:
+#   1. docker build → push нового образу `digits-inference:<TS>-<SHA>`
+#      у GitLab Container Registry.
+#   2. aws eks update-kubeconfig → застосовуємо `model/train-job.yaml` з
+#      підстановкою свіжого образу. Job, який стартує всередині кластера,
+#      виходить на in-cluster MLflow та реєструє нову версію моделі +
+#      перемикає її на стадію Production.
+#   3. Бампимо `helm/values.yaml` на новий image.tag, коммітимо назад у
+#      гілку `final-project`. ArgoCD ловить коміт, виконує rolling restart
+#      inference-Deployment-а → нові поди підхоплюють останню
+#      Production-версію моделі з Registry.
+#
+# Тригери:
+#   - manual (Run pipeline у UI) — основний шлях для демо.
+#   - web (CI_PIPELINE_SOURCE == "web") — той же, через "Run pipeline".
+#   - опційно з webhook-у drift-детектора через GitLab Pipeline Triggers
+#     (CI_PIPELINE_SOURCE == "trigger") — токен в окремій змінній.
+#
+# Потрібні CI/CD змінні (Settings → CI/CD → Variables):
+#   AWS_ACCESS_KEY_ID            — masked
+#   AWS_SECRET_ACCESS_KEY        — masked
+#   AWS_REGION                   — наприклад, eu-central-1
+#   EKS_CLUSTER_NAME             — імʼя кластера (з terraform output)
+#   GITLAB_PUSH_TOKEN            — Project Access Token (scope: write_repository),
+#                                   masked
+
+stages:
+  - retrain
+
+variables:
+  KUBECTL_VERSION: "v1.31.1"
+  DOCKER_HOST: "tcp://docker:2376"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_DRIVER: overlay2
+
+retrain-model:
+  stage: retrain
+  image: docker:24
+  services:
+    - docker:24-dind
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_COMMIT_BRANCH == "final-project" && $CI_PIPELINE_SOURCE == "push"
+      when: manual
+      allow_failure: true
+  before_script:
+    - apk add --no-cache aws-cli git bash curl gettext
+    - curl -sL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
+    - kubectl version --client=true
+    - aws --version
+  script:
+    - |
+      set -eu
+
+      TAG="$(date +%Y%m%d-%H%M%S)-${CI_COMMIT_SHORT_SHA}"
+      IMAGE="${CI_REGISTRY_IMAGE}/digits-inference:${TAG}"
+
+      echo "=== 1. Build & push image ==="
+      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+      docker build -t "$IMAGE" .
+      docker push "$IMAGE"
+      echo "Built and pushed: $IMAGE"
+
+      echo "=== 2. Configure kubectl for EKS ==="
+      aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+      kubectl get nodes
+
+      echo "=== 3. Apply train Job ==="
+      JOB_NAME=$(sed "s|__IMAGE__|${IMAGE}|g" model/train-job.yaml \
+                 | kubectl create -f - -o jsonpath='{.metadata.name}')
+      echo "Started training job: $JOB_NAME"
+      if ! kubectl -n inference wait --for=condition=complete --timeout=600s "job/$JOB_NAME"; then
+        kubectl -n inference describe "job/$JOB_NAME" || true
+        kubectl -n inference logs "job/$JOB_NAME" --tail=200 || true
+        exit 1
+      fi
+      kubectl -n inference logs "job/$JOB_NAME" --tail=50
+
+      echo "=== 4. Bump image tag in helm/values.yaml ==="
+      sed -i "s|^  tag: .*|  tag: \"${TAG}\"|" helm/values.yaml
+      grep "^  tag:" helm/values.yaml
+
+      echo "=== 5. Commit & push back ==="
+      git config user.email "ci@gitlab"
+      git config user.name "GitLab CI"
+      git add helm/values.yaml
+      if git diff --cached --quiet; then
+        echo "No values.yaml changes — skipping push"
+      else
+        git commit -m "chore: retrain bump image to ${TAG} [skip ci]"
+        git push "https://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
+        echo "Pushed values bump to ${CI_COMMIT_BRANCH}"
+      fi

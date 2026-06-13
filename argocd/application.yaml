@@ -1,0 +1,32 @@
+# ArgoCD Application для digits-inference сервісу.
+#
+# Цей файл — авторитетне джерело. У App-of-Apps репозиторії
+# (https://github.com/Cryptophobic/goit-argo) лежить ідентичний манифест
+# під `apps/digits-inference.yaml`, який ArgoCD root-app підхоплює
+# автоматично. Тримаємо тут окрему копію згідно структури завдання
+# (`argocd/application.yaml`).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: digits-inference
+  namespace: infra-tools
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Cryptophobic/ML-OPS-CI-CD-classes.git
+    targetRevision: final-project
+    path: helm
+    helm:
+      releaseName: digits-inference
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: inference
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
