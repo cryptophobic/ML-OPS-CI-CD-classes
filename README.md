@@ -253,7 +253,7 @@ curl -s -X POST http://localhost:8000/predict \
   -d "$(python -c 'import json; print(json.dumps({"features": [0.0]*64}))')" | jq .
 ```
 
-Очікуєме:
+Очікувано:
 - HTTP 200, `"drift": true`, `drift_features: [...]`, `max_zscore > 3.0`
 - У логах: `{"event": "drift_detected", ...}` і явний рядок `Drift detected`
 - У Prometheus: `inference_drift_events_total` збільшилось на 1
