@@ -1,6 +1,6 @@
 image:
   repository: registry.gitlab.com/cryptophobic/mlops-train-automation/digits-inference
-  tag: "0.1.0"
+  tag: "seed-1781360169"
   pullPolicy: IfNotPresent
 
 # Pull secret для приватного GitLab Container Registry. Створюється
