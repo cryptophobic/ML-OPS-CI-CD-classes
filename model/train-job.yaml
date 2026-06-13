@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/component: trainer
     spec:
       restartPolicy: Never
+      imagePullSecrets:
+        - name: gitlab-registry
       containers:
         - name: train
           image: __IMAGE__

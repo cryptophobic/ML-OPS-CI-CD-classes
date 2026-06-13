@@ -126,7 +126,27 @@ kubectl get nodes
 kubectl -n infra-tools get pods
 ```
 
-### 2. Активувати App-of-Apps (goit-argo)
+### 2. Pull-secret для приватного GitLab Container Registry
+
+Якщо проект `mlops-train-automation` у GitLab — Private, у Settings →
+Repository → Deploy tokens створи токен зі scope `read_registry` і
+залий його як Kubernetes Secret у namespace `inference`:
+
+```bash
+kubectl create namespace inference --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n inference create secret docker-registry gitlab-registry \
+  --docker-server=registry.gitlab.com \
+  --docker-username='<deploy-token-username>' \
+  --docker-password='<deploy-token>' \
+  --docker-email='<your-email>'
+```
+
+Якщо проект Public — у `helm/values.yaml` заміни секцію
+`imagePullSecrets` на `imagePullSecrets: []` (і в `model/train-job.yaml`
+просто прибери блок `imagePullSecrets:`).
+
+### 3. Активувати App-of-Apps (goit-argo)
 
 ```bash
 # root-app дивиться на github.com/Cryptophobic/goit-argo:main, шлях apps/.
@@ -144,7 +164,7 @@ kubectl -n infra-tools get applications
 не зможе піднятися, поки в MLflow Model Registry немає
 `digits-classifier@Production` — спершу треба запустити перший train.
 
-### 3. Перший train (seed моделі)
+### 4. Перший train (seed моделі)
 
 Запустити training Job вручну (CI робить це автоматично, але для
 першого разу — самостійно):
@@ -152,11 +172,11 @@ kubectl -n infra-tools get applications
 ```bash
 TAG="seed-$(date +%s)"
 # build & push image у будь-який registry (нижче — приклад для GitLab)
-docker build -t registry.gitlab.com/<you>/ml-ops-ci-cd-classes/digits-inference:${TAG} .
-docker push     registry.gitlab.com/<you>/ml-ops-ci-cd-classes/digits-inference:${TAG}
+docker build -t registry.gitlab.com/<you>/mlops-train-automation/digits-inference:${TAG} .
+docker push     registry.gitlab.com/<you>/mlops-train-automation/digits-inference:${TAG}
 
 # Запуск train Job
-sed "s|__IMAGE__|registry.gitlab.com/<you>/ml-ops-ci-cd-classes/digits-inference:${TAG}|g" \
+sed "s|__IMAGE__|registry.gitlab.com/<you>/mlops-train-automation/digits-inference:${TAG}|g" \
     model/train-job.yaml | kubectl apply -f -
 
 # Дочекатися завершення

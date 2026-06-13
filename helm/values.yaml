@@ -1,7 +1,19 @@
 image:
-  repository: registry.gitlab.com/cryptophobic/ml-ops-ci-cd-classes/digits-inference
+  repository: registry.gitlab.com/cryptophobic/mlops-train-automation/digits-inference
   tag: "0.1.0"
   pullPolicy: IfNotPresent
+
+# Pull secret для приватного GitLab Container Registry. Створюється
+# одноразово до того, як ArgoCD виконає перший sync:
+#
+#   kubectl -n inference create secret docker-registry gitlab-registry \
+#     --docker-server=registry.gitlab.com \
+#     --docker-username=<deploy-token-user> \
+#     --docker-password=<deploy-token>
+#
+# Якщо registry публічний — заміни на `imagePullSecrets: []`.
+imagePullSecrets:
+  - name: gitlab-registry
 
 replicaCount: 1
 
